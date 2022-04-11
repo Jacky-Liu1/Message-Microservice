@@ -5,9 +5,15 @@ extern crate futures;
 extern crate log;
 extern crate env_logger;
 
+use hyper::{Chunk, StatusCode};
+use hyper::Method::{Get, Post};
 use hyper::server::{Request, Response, Service};
 
-use futures::future::Future;
+use futures::Stream;
+use futures::future::{Future, FutureResult};
+
+use std::collections::HashMap;
+use std::io;
 
 fn main() {
     env_logger::init();
@@ -15,7 +21,6 @@ fn main() {
     let server = hyper::server::Http::new()
         .bind(&address, || Ok(Microservice {}))
         .unwrap();
-        info!("hello2");
     println!("Running microservice at {}", address);
     server.run().unwrap();
 }
@@ -30,7 +35,49 @@ impl Service for Microservice {
 
     fn call(&self, request: Request) -> Self::Future {
         println!("Microservice received a request: {:?}", request);
-        Box::new(futures::future::ok(Response::new()))
+        match (request.method(), request.path()) {
+            (&Post, "/") => {
+                let future = request
+                    .body()
+                    .concat2()
+                    .and_then(parse_from)
+                    .and_then(write_to_db)
+                    .then(make_post_response);
+                Box::new(future)
+            }
+            _ => Box::new(futures:future::ok(
+                Response::new().with_status(StatusCode::NotFound),
+            )),
+        }
     }
+}
+
+struct NewMessage {
+    username: String,
+    message: String,
+}
+
+fn parse_form(form_chunk: Chunk) -> FutureResult<NewMessage, hyper::Error> {
+    let mut form = url::form_urlencoded::parse(form_chunk.as_ref())
+        .into_owned()
+        .collect::<HashMap<String, String>>();
+
+    if let Some(message) = form.remove("message") {
+        //////////// TODOOOOO!!!!
+    }
+
+
+    futures::future::ok(NewMessage {
+        username: String::new(),
+        message: String::new(),
+    })
+}
+
+fn write_to_db(entry: NewMessage) -> FutureResult<i64, hyper::Error> {
+    futures::future::ok(0)
+}
+
+fn make_post_response(result: Result<i64, hyper::Error>) -> FutureResult<hyper::Response, hyper::Error> {
+    futures::future::ok(Response::new().with_status(StatusCode::NotFound))
 }
 
